@@ -1,0 +1,139 @@
+Project 2: Multi-Agent Book Writer
+Overview
+This project simulates a writing team of AI agents that co-author a book. Each agent has a role:
+
+Planner: Defines chapters and structure
+
+Researcher: Finds or retrieves supporting content
+
+Writer: Drafts content for each chapter
+
+Editor: Reviews and polishes output
+
+The agents communicate in sequence or loop using shared memory or direct calls, leading to a complete book draft.
+
+Tech Stack
+ComponentTool/LibLLMsOllama (mistral, llama3, deepseek)Agent OrchestrationPython classes or LangGraph (optional)Context SharingJSON file / in-memory objectTool Use (Optional)Web Search / Chroma for RAGOptional UIStreamlit or CLI
+
+Project Structure
+multiagent-book-writer/
+├── main.py
+├── agents/
+│   ├── planner.py
+│   ├── researcher.py
+│   ├── writer.py
+│   └── editor.py
+├── shared/
+│   └── context.py
+├── output/
+│   └── draft.txt
+├── requirements.txt
+└── config.yaml
+Step-by-Step Implementation
+Step 1: Install Dependencies
+pip install openai ollama
+ollama pull mistral  # or llama3, deepseek
+We'll use Ollama’s local REST API (localhost:11434) to access the models.
+
+Step 2: Shared Context
+shared/context.py
+
+context = {
+    "title": "The Rise of Agentic AI",
+    "chapters": [],
+    "research": {},
+    "drafts": [],
+}
+Step 3: Planner Agent
+agents/planner.py
+
+import requests
+from shared.context import context
+
+def run_planner():
+    prompt = f"Plan 5 chapters for a book titled '{context['title']}'. Return a list."
+    response = requests.post("http://localhost:11434/api/generate", json={
+        "model": "mistral",
+        "prompt": prompt,
+        "stream": False
+    })
+    context["chapters"] = response.json()["response"].strip().split("\n")
+Step 4: Researcher Agent
+agents/researcher.py
+
+import requests
+from shared.context import context
+
+def run_researcher():
+    for chapter in context["chapters"]:
+        prompt = f"Give background facts, quotes, and details for a chapter titled '{chapter}'."
+        response = requests.post("http://localhost:11434/api/generate", json={
+            "model": "mistral",
+            "prompt": prompt,
+            "stream": False
+        })
+        context["research"][chapter] = response.json()["response"]
+Step 5: Writer Agent
+agents/writer.py
+
+import requests
+from shared.context import context
+
+def run_writer():
+    for chapter in context["chapters"]:
+        prompt = f"Using the following research:\n{context['research'][chapter]}\nWrite the full draft of the chapter titled '{chapter}'."
+        response = requests.post("http://localhost:11434/api/generate", json={
+            "model": "mistral",
+            "prompt": prompt,
+            "stream": False
+        })
+        context["drafts"].append(f"# {chapter}\n{response.json()['response']}\n\n")
+Step 6: Editor Agent
+agents/editor.py
+
+import requests
+from shared.context import context
+
+def run_editor():
+    final_output = ""
+    for draft in context["drafts"]:
+        prompt = f"Edit the following for grammar and coherence:\n{draft}"
+        response = requests.post("http://localhost:11434/api/generate", json={
+            "model": "mistral",
+            "prompt": prompt,
+            "stream": False
+        })
+        final_output += response.json()["response"] + "\n\n"
+
+    with open("output/draft.txt", "w") as f:
+        f.write(final_output)
+Step 7: Run Pipeline
+main.py
+
+from agents.planner import run_planner
+from agents.researcher import run_researcher
+from agents.writer import run_writer
+from agents.editor import run_editor
+
+def run_pipeline():
+    run_planner()
+    run_researcher()
+    run_writer()
+    run_editor()
+
+if __name__ == "__main__":
+    run_pipeline()
+    print("Book written! Check output/draft.txt")
+Output
+A full multi-chapter book draft written and edited collaboratively by autonomous AI agents.
+
+Output is saved in output/draft.txt.
+
+Optional Extensions
+Use LangGraph for structured agent flow with retries
+
+Add memory and iteration feedback loop
+
+Add Streamlit UI to monitor each stage
+
+Export as PDF or Markdown
